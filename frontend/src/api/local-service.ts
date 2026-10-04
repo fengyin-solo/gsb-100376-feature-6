@@ -1,9 +1,15 @@
 import { MODULE_BY_KEY } from '@/data/modules'
+import { operatorById } from '@/data/auth'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
+import {
+  isGuardedModule,
+  runGuardedAction,
+  type ActionPayload,
+} from '@/api/review-guard'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
-const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
+const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚', '退回']
 
 export function moduleMeta(key: string): ModuleMeta {
   const meta = MODULE_BY_KEY.get(key)
@@ -28,8 +34,20 @@ export function listEntries(key: string, filters: Record<string, string> = {}): 
   return { items: matched, total: matched.length, page: 1, size: matched.length }
 }
 
-export function runAction(key: string, id: number, action: string): ActionResult {
+export function runAction(
+  key: string,
+  id: number,
+  action: string,
+  options?: { operatorId?: string; payload?: ActionPayload },
+): ActionResult {
   const meta = moduleMeta(key)
+  // 两个检测入口走持证复核守卫：权限、授权编号、并发核销都在守卫里统一校验。
+  if (isGuardedModule(key)) {
+    if (!options?.operatorId) {
+      return { ok: false, message: '会话缺少操作人员信息，请重新选择身份后再操作' }
+    }
+    return runGuardedAction(key, id, action, operatorById(options.operatorId), options.payload)
+  }
   const target = meta.actionTargets[action]
   if (!target) {
     return { ok: false, message: `${meta.entity}没有登记「${action}」这个动作` }
