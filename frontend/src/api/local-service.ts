@@ -1,6 +1,15 @@
 import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
-import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
+import type {
+  ActionPayload,
+  ActionResult,
+  EntryRow,
+  EntryValue,
+  ModuleMeta,
+  OverviewResult,
+  PageResult,
+} from '@/data/types'
+import { confirmCalibration, CALIBRATION_KEY } from './calibration-service'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
 const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
@@ -28,7 +37,21 @@ export function listEntries(key: string, filters: Record<string, string> = {}): 
   return { items: matched, total: matched.length, page: 1, size: matched.length }
 }
 
-export function runAction(key: string, id: number, action: string): ActionResult {
+export function runAction(
+  key: string,
+  id: number,
+  action: string,
+  payload: ActionPayload = {},
+): ActionResult {
+  // 仪器检定「确认合格」：另一个检测入口，结论签发同样必须登记复核凭证。
+  if (key === CALIBRATION_KEY && action === '确认合格') {
+    return confirmCalibration(
+      id,
+      payload.operatorId ?? '',
+      payload.credentialNo ?? '',
+      payload.text ?? '',
+    )
+  }
   const meta = moduleMeta(key)
   const target = meta.actionTargets[action]
   if (!target) {
@@ -56,6 +79,13 @@ export function runAction(key: string, id: number, action: string): ActionResult
   return { ok: true, message: `${meta.entity}已${action}，当前状态「${target}」` }
 }
 
+function toCell(value: EntryValue | undefined): string {
+  if (Array.isArray(value)) {
+    return value.join(' / ')
+  }
+  return value === undefined || value === null ? '' : String(value)
+}
+
 export function resetModule(key: string): PageResult {
   resetRows(key)
   return listEntries(key)
@@ -66,9 +96,9 @@ export function exportEntries(key: string): { filename: string; content: string 
   const header = ['编号', ...meta.fields, '当前状态']
   const lines = [header.join(',')]
   for (const row of listRows(key)) {
-    lines.push([row.id, ...meta.fields.map((field) => row[field] ?? ''), row.status].join(','))
+    lines.push([row.id, ...meta.fields.map((field) => toCell(row[field])), row.status].join(','))
   }
-  return { filename: `${meta.name}-清单.csv`, content: `\uFEFF${lines.join('\n')}` }
+  return { filename: `${meta.name}-清单.csv`, content: `﻿${lines.join('\n')}` }
 }
 
 export function downloadEntries(key: string): void {

@@ -1,11 +1,13 @@
 /** 纯前端数据层的公共类型：与全栈版后端返回的结构保持一致，换回后端时页面不用改。 */
 
+export type EntryValue = string | number | boolean | string[]
+
 export type EntryRow = {
   id: number
   status: string
   pending: boolean
   abnormal: boolean
-  [field: string]: string | number | boolean
+  [field: string]: EntryValue
 }
 
 export type ModuleMeta = {
@@ -30,6 +32,14 @@ export type PageResult = {
 export type ActionResult = {
   ok: boolean
   message: string
+}
+
+/** 动作附加信息：复核凭证号、中间结论、附加读数等随动作一起提交的数据 */
+export type ActionPayload = {
+  operatorId?: string
+  credentialNo?: string
+  text?: string
+  [key: string]: string | undefined
 }
 
 export type OverviewResult = {
